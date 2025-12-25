@@ -33,6 +33,7 @@ DEFAULT_BASE_URL = "https://github.com/agentclientprotocol/registry/releases/lat
 
 # Icon requirements
 PREFERRED_ICON_SIZE = 16
+ALLOWED_FILL_STROKE_VALUES = {"currentcolor", "none", "inherit"}
 
 # URL validation
 SKIP_URL_VALIDATION = os.environ.get("SKIP_URL_VALIDATION", "").lower() in ("1", "true", "yes")
@@ -182,6 +183,48 @@ def validate_distribution_urls(distribution: dict) -> list[str]:
     return errors
 
 
+def validate_icon_monochrome(content: str) -> list[str]:
+    """Validate that icon uses currentColor and no hardcoded colors."""
+    errors = []
+    reported_colors = set()
+
+    # Check fill attributes - must be currentColor or none
+    fill_matches = re.findall(r'\bfill\s*=\s*["\']([^"\']+)["\']', content, re.IGNORECASE)
+    for fill_value in fill_matches:
+        normalized = fill_value.strip().lower()
+        if normalized not in ALLOWED_FILL_STROKE_VALUES:
+            errors.append(f"Icon has hardcoded fill=\"{fill_value}\" (use currentColor or none)")
+            reported_colors.add(fill_value.strip())
+
+    # Check stroke attributes - must be currentColor or none
+    stroke_matches = re.findall(r'\bstroke\s*=\s*["\']([^"\']+)["\']', content, re.IGNORECASE)
+    for stroke_value in stroke_matches:
+        normalized = stroke_value.strip().lower()
+        if normalized not in ALLOWED_FILL_STROKE_VALUES:
+            errors.append(f"Icon has hardcoded stroke=\"{stroke_value}\" (use currentColor or none)")
+            reported_colors.add(stroke_value.strip())
+
+    # Check for hardcoded colors in style attributes
+    style_matches = re.findall(r'\bstyle\s*=\s*["\']([^"\']+)["\']', content, re.IGNORECASE)
+    for style_value in style_matches:
+        # Check for fill/stroke with hardcoded colors in style
+        style_fill = re.search(r'\bfill\s*:\s*([^;]+)', style_value, re.IGNORECASE)
+        if style_fill:
+            fill_val = style_fill.group(1).strip().lower()
+            if fill_val not in ALLOWED_FILL_STROKE_VALUES:
+                errors.append(f"Icon has hardcoded style fill: {style_fill.group(1).strip()}")
+                reported_colors.add(style_fill.group(1).strip())
+        style_stroke = re.search(r'\bstroke\s*:\s*([^;]+)', style_value, re.IGNORECASE)
+        if style_stroke:
+            stroke_val = style_stroke.group(1).strip().lower()
+            if stroke_val not in ALLOWED_FILL_STROKE_VALUES:
+                errors.append(f"Icon has hardcoded style stroke: {style_stroke.group(1).strip()}")
+                reported_colors.add(style_stroke.group(1).strip())
+
+    # Deduplicate errors
+    return list(dict.fromkeys(errors))
+
+
 def validate_icon(icon_path: Path) -> list[str]:
     """Validate icon.svg and return list of warnings/errors."""
     errors = []
@@ -215,6 +258,10 @@ def validate_icon(icon_path: Path) -> list[str]:
 
     if vb_width != PREFERRED_ICON_SIZE or vb_height != PREFERRED_ICON_SIZE:
         errors.append(f"Icon should be {PREFERRED_ICON_SIZE}x{PREFERRED_ICON_SIZE} (got {int(vb_width)}x{int(vb_height)})")
+
+    # Validate monochrome (currentColor) usage
+    monochrome_errors = validate_icon_monochrome(content)
+    errors.extend(monochrome_errors)
 
     return errors
 

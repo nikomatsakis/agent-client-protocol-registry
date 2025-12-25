@@ -19,13 +19,13 @@ This is a registry of ACP (Agent Client Protocol) agents. The structure is:
 ```
 <agent-id>/
 ├── agent.json    # Agent metadata and distribution info (required)
-└── icon.svg      # Agent icon, must be 16x16 (optional)
+└── icon.svg      # Agent icon: 16x16 SVG, monochrome with currentColor (optional)
 ```
 
 **Build process** (`.github/workflows/build_registry.py`):
 1. Scans directories for `agent.json` files
 2. Validates against `agent.schema.json` (JSON Schema)
-3. Validates icon dimensions (16x16 SVG required)
+3. Validates icons (16x16 SVG, monochrome with `currentColor`)
 4. Aggregates all agents into `dist/registry.json`
 5. Copies icons to `dist/<agent-id>.svg`
 
@@ -38,7 +38,7 @@ This is a registry of ACP (Agent Client Protocol) agents. The structure is:
 - `id`: lowercase, hyphens only, must match directory name
 - `version`: semantic versioning (e.g., `1.0.0`)
 - `distribution`: at least one of `binary`, `npx`, `uvx`
-- `icon.svg`: must be 16x16 (warnings for non-compliance)
+- `icon.svg`: must be SVG format, 16x16, monochrome using `currentColor` (enables theming)
 - **URL validation**: All distribution URLs must be accessible (binary archives, npm/PyPI packages)
 
 Set `SKIP_URL_VALIDATION=1` to bypass URL checks during local development.
@@ -48,3 +48,23 @@ Set `SKIP_URL_VALIDATION=1` to bypass URL checks during local development.
 - `binary`: Platform-specific archives (`darwin-aarch64`, `linux-x86_64`, etc.)
 - `npx`: npm packages
 - `uvx`: PyPI packages
+
+## Icon Requirements
+
+Icons must be:
+- **SVG format** (only `.svg` files accepted)
+- **16x16 dimensions** (via width/height attributes or viewBox)
+- **Monochrome using `currentColor`** - all fills and strokes must use `currentColor` or `none`
+
+Using `currentColor` enables icons to adapt to different themes (light/dark mode) automatically.
+
+**Valid example:**
+```svg
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+  <path fill="currentColor" d="M..."/>
+</svg>
+```
+
+**Invalid patterns:**
+- Hardcoded colors: `fill="#FF5500"`, `fill="red"`, `stroke="rgb(0,0,0)"`
+- Missing currentColor: `fill` or `stroke` without `currentColor`
