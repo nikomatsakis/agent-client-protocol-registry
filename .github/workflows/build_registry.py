@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Build aggregated registry.json from individual agent directories."""
+"""Build aggregated registry.json from individual agent and extension directories."""
 
 import json
 import os
 import re
 import sys
-import urllib.request
 import urllib.error
+import urllib.request
 from pathlib import Path
 
 try:
@@ -26,6 +26,8 @@ SKIP_DIRS = {
     "dist",
     "_not_yet_unsupported",
     ".sandbox",
+    ".sparkle-space",
+    ".ruff_cache",
 }
 REQUIRED_FIELDS = {"id", "name", "version", "description", "distribution"}
 VALID_DISTRIBUTION_TYPES = {"binary", "npx", "uvx"}
@@ -440,102 +442,140 @@ def validate_agent(
     return errors
 
 
+def process_entry(
+    entry_dir: Path,
+    entry_file: str,
+    entry_type: str,
+    schema: dict | None,
+    base_url: str,
+    seen_ids: dict,
+) -> tuple[dict | None, list[str]]:
+    """Process a single agent or extension entry. Returns (entry, errors)."""
+    entry_path = entry_dir / entry_file
+
+    # Parse JSON with error handling
+    try:
+        with open(entry_path) as f:
+            entry = json.load(f)
+    except json.JSONDecodeError as e:
+        return None, [f"{entry_dir.name}/{entry_file} is invalid JSON: {e}"]
+
+    # Validate entry (uses same schema for both agents and extensions)
+    validation_errors = validate_agent(entry, entry_dir.name, schema)
+    if validation_errors:
+        return None, [f"{entry_dir.name}/{entry_file} validation failed:"] + [
+            f"  - {e}" for e in validation_errors
+        ]
+
+    # Validate distribution versions match entry version
+    if "distribution" in entry:
+        version_errors = validate_distribution_versions(
+            entry["version"], entry["distribution"]
+        )
+        if version_errors:
+            return None, [f"{entry_dir.name} version validation failed:"] + [
+                f"  - {e}" for e in version_errors
+            ]
+
+    # Check for duplicate IDs (across both agents and extensions)
+    entry_id = entry["id"]
+    if entry_id in seen_ids:
+        return None, [
+            f"Duplicate ID '{entry_id}' in {entry_dir.name}/ (already in {seen_ids[entry_id]}/)"
+        ]
+    seen_ids[entry_id] = entry_dir.name
+
+    # Validate distribution URLs
+    if "distribution" in entry:
+        url_errors = validate_distribution_urls(entry["distribution"])
+        if url_errors:
+            return None, [f"{entry_dir.name} distribution URL validation failed:"] + [
+                f"  - {e}" for e in url_errors
+            ]
+
+    # Validate and set icon URL if icon exists
+    icon_path = entry_dir / "icon.svg"
+    if icon_path.exists():
+        icon_errors = validate_icon(icon_path)
+        if icon_errors:
+            print(f"Warning: {entry_dir.name}/icon.svg:")
+            for error in icon_errors:
+                print(f"  - {error}")
+        entry["icon"] = f"{base_url}/{entry_id}.svg"
+
+    return entry, []
+
+
 def build_registry():
-    """Build registry.json from agent directories."""
+    """Build registry.json from agent and extension directories."""
     registry_dir = Path(__file__).parent.parent.parent
     base_url = get_base_url()
     agents = []
+    extensions = []
     seen_ids = {}
     has_errors = False
 
-    # Load schema for validation
+    # Load schema for validation (used for both agents and extensions)
     schema = load_schema(registry_dir)
     if schema and not HAS_JSONSCHEMA:
         print("Warning: jsonschema not installed, skipping schema validation")
         print("  Install with: pip install jsonschema")
 
-    for agent_dir in sorted(registry_dir.iterdir()):
-        if not agent_dir.is_dir() or agent_dir.name in SKIP_DIRS:
+    for entry_dir in sorted(registry_dir.iterdir()):
+        if not entry_dir.is_dir() or entry_dir.name in SKIP_DIRS:
             continue
 
-        agent_json_path = agent_dir / "agent.json"
-        if not agent_json_path.exists():
-            print(f"Warning: {agent_dir.name}/ has no agent.json, skipping")
-            continue
+        agent_json_path = entry_dir / "agent.json"
+        extension_json_path = entry_dir / "extension.json"
 
-        # Parse JSON with error handling
-        try:
-            with open(agent_json_path) as f:
-                agent = json.load(f)
-        except json.JSONDecodeError as e:
-            print(f"Error: {agent_dir.name}/agent.json is invalid JSON: {e}")
+        has_agent = agent_json_path.exists()
+        has_extension = extension_json_path.exists()
+
+        if has_agent and has_extension:
+            print(f"Error: {entry_dir.name}/ has both agent.json and extension.json")
             has_errors = True
             continue
 
-        # Validate agent
-        errors = validate_agent(agent, agent_dir.name, schema)
-        if errors:
-            print(f"Error: {agent_dir.name}/agent.json validation failed:")
-            for error in errors:
-                print(f"  - {error}")
-            has_errors = True
-            continue
-
-        # Validate distribution versions match agent version
-        if "distribution" in agent:
-            version_errors = validate_distribution_versions(
-                agent["version"], agent["distribution"]
-            )
-            if version_errors:
-                print(f"Error: {agent_dir.name} version validation failed:")
-                for error in version_errors:
-                    print(f"  - {error}")
-                has_errors = True
-                continue
-
-        # Check for duplicate IDs
-        agent_id = agent["id"]
-        if agent_id in seen_ids:
+        if not has_agent and not has_extension:
             print(
-                f"Error: Duplicate agent ID '{agent_id}' in {agent_dir.name}/ (already in {seen_ids[agent_id]}/)"
+                f"Warning: {entry_dir.name}/ has no agent.json or extension.json, skipping"
             )
-            has_errors = True
             continue
-        seen_ids[agent_id] = agent_dir.name
 
-        # Validate distribution URLs
-        if "distribution" in agent:
-            url_errors = validate_distribution_urls(agent["distribution"])
-            if url_errors:
-                print(f"Error: {agent_dir.name} distribution URL validation failed:")
-                for error in url_errors:
-                    print(f"  - {error}")
+        if has_agent:
+            entry, errors = process_entry(
+                entry_dir, "agent.json", "agent", schema, base_url, seen_ids
+            )
+            if errors:
+                for error in errors:
+                    print(f"Error: {error}")
                 has_errors = True
                 continue
-
-        # Validate and set icon URL if icon exists
-        icon_path = agent_dir / "icon.svg"
-        if icon_path.exists():
-            icon_errors = validate_icon(icon_path)
-            if icon_errors:
-                print(f"Warning: {agent_dir.name}/icon.svg:")
-                for error in icon_errors:
-                    print(f"  - {error}")
-            agent["icon"] = f"{base_url}/{agent_id}.svg"
-
-        agents.append(agent)
-        print(f"Added: {agent_id} v{agent['version']}")
+            agents.append(entry)
+            print(f"Added agent: {entry['id']} v{entry['version']}")
+        else:
+            entry, errors = process_entry(
+                entry_dir, "extension.json", "extension", schema, base_url, seen_ids
+            )
+            if errors:
+                for error in errors:
+                    print(f"Error: {error}")
+                has_errors = True
+                continue
+            extensions.append(entry)
+            print(f"Added extension: {entry['id']} v{entry['version']}")
 
     if has_errors:
         print("\nBuild failed due to validation errors")
         sys.exit(1)
 
-    if not agents:
-        print("\nWarning: No agents found")
+    if not agents and not extensions:
+        print("\nWarning: No agents or extensions found")
 
     registry = {
         "version": REGISTRY_VERSION,
         "agents": agents,
+        "extensions": extensions,
     }
 
     # Create dist directory
@@ -548,12 +588,12 @@ def build_registry():
         json.dump(registry, f, indent=2)
         f.write("\n")
 
-    # Copy icons to dist
-    for agent in agents:
-        agent_id = agent["id"]
-        icon_src = registry_dir / agent_id / "icon.svg"
+    # Copy icons to dist (for both agents and extensions)
+    for entry in agents + extensions:
+        entry_id = entry["id"]
+        icon_src = registry_dir / entry_id / "icon.svg"
         if icon_src.exists():
-            icon_dst = dist_dir / f"{agent_id}.svg"
+            icon_dst = dist_dir / f"{entry_id}.svg"
             icon_dst.write_bytes(icon_src.read_bytes())
 
     # Copy schema files to dist
@@ -563,7 +603,7 @@ def build_registry():
             schema_dst = dist_dir / schema_file
             schema_dst.write_bytes(schema_src.read_bytes())
 
-    print(f"\nBuilt dist/ with {len(agents)} agents")
+    print(f"\nBuilt dist/ with {len(agents)} agents and {len(extensions)} extensions")
 
 
 if __name__ == "__main__":
