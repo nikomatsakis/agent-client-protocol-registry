@@ -14,20 +14,23 @@ python .github/workflows/build_registry.py
 
 ## Architecture
 
-This is a registry of ACP (Agent Client Protocol) agents. The structure is:
+This is a registry of ACP (Agent Client Protocol) agents and extensions. The structure is:
 
 ```
-<agent-id>/
-├── agent.json    # Agent metadata and distribution info (required)
-└── icon.svg      # Agent icon: 16x16 SVG, monochrome with currentColor (optional)
+<id>/
+├── agent.json      # Agent metadata and distribution info
+├── extension.json  # OR extension metadata (same schema as agent.json)
+└── icon.svg        # Icon: 16x16 SVG, monochrome with currentColor (optional)
 ```
+
+Each directory contains either `agent.json` (for agents) or `extension.json` (for extensions), but not both. Extensions use the same schema as agents (`agent.schema.json`).
 
 **Build process** (`.github/workflows/build_registry.py`):
-1. Scans directories for `agent.json` files
+1. Scans directories for `agent.json` or `extension.json` files
 2. Validates against `agent.schema.json` (JSON Schema)
 3. Validates icons (16x16 SVG, monochrome with `currentColor`)
-4. Aggregates all agents into `dist/registry.json`
-5. Copies icons to `dist/<agent-id>.svg`
+4. Aggregates into `dist/registry.json` with separate `agents` and `extensions` arrays
+5. Copies icons to `dist/<id>.svg`
 
 **CI/CD** (`.github/workflows/build-registry.yml`):
 - PRs: Runs validation only

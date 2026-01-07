@@ -1,18 +1,20 @@
-# Contributing to the ACP Agent Registry
+# Contributing to the ACP Registry
 
-## Adding a New Agent
+## Adding a New Agent or Extension
 
 1. **Fork this repository**
 
-2. **Create a directory for your agent**
+2. **Create a directory for your entry**
 
    ```
-   mkdir <agent-id>/
+   mkdir <id>/
    ```
 
-   The directory name should match your agent's `id` field.
+   The directory name must match your entry's `id` field.
 
-3. **Create `agent.json`**
+3. **Create `agent.json` or `extension.json`**
+
+   Use `agent.json` for agents, `extension.json` for extensions. Both use the same schema.
 
    ```json
    {
@@ -119,11 +121,11 @@ Supported platforms: `darwin-aarch64`, `darwin-x86_64`, `linux-aarch64`, `linux-
 | `authors` | array | List of author names/emails |
 | `license` | string | SPDX license identifier |
 
-## Updating an Existing Agent
+## Updating an Existing Entry
 
-To update your agent's version or distribution URLs:
+To update your agent or extension's version or distribution URLs:
 
-1. Fork and update `<agent-id>/agent.json`
+1. Fork and update the `agent.json` or `extension.json` file
 2. Submit a Pull Request
 3. CI will validate and merge will trigger a new registry release
 

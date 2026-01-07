@@ -1,8 +1,8 @@
-# ACP Agent Registry
+# ACP Registry
 
 > ⚠️ **Work in Progress**: This registry is under active development. Format and contents may change.
 
-A registry of agents implementing the [Agent Client Protocol (ACP)](https://github.com/agentclientprotocol/agent-client-protocol).
+A registry of agents and extensions implementing the [Agent Client Protocol (ACP)](https://github.com/agentclientprotocol/agent-client-protocol).
 
 > **Note**: This registry only includes agents that support authentication. Agents must implement auth flows to be listed here.
 
@@ -27,39 +27,46 @@ https://github.com/agentclientprotocol/registry/releases/latest/download/registr
 
 ## Registry Format
 
+The registry contains both agents and extensions:
+
 ```json
 {
   "version": "1.0.0",
-  "agents": [
-    {
-      "id": "agent-id",
-      "name": "Agent Name",
-      "version": "1.0.0",
-      "description": "Agent description",
-      "repository": "https://github.com/...",
-      "authors": ["Author Name"],
-      "license": "MIT",
-      "icon": "https://.../agent-id.svg",
-      "distribution": {
-        "binary": {
-          "darwin-aarch64": {
-            "archive": "https://...",
-            "cmd": "./agent",
-            "args": ["serve"],
-            "env": {}
-          }
-        },
-        "npx": {
-          "package": "@scope/package",
-          "args": ["--acp"]
-        },
-        "uvx": {
-          "package": "package-name",
-          "args": ["serve"]
-        }
+  "agents": [...],
+  "extensions": [...]
+}
+```
+
+Each entry (agent or extension) has the same structure:
+
+```json
+{
+  "id": "entry-id",
+  "name": "Entry Name",
+  "version": "1.0.0",
+  "description": "Entry description",
+  "repository": "https://github.com/...",
+  "authors": ["Author Name"],
+  "license": "MIT",
+  "icon": "https://.../entry-id.svg",
+  "distribution": {
+    "binary": {
+      "darwin-aarch64": {
+        "archive": "https://...",
+        "cmd": "./executable",
+        "args": ["serve"],
+        "env": {}
       }
+    },
+    "npx": {
+      "package": "@scope/package",
+      "args": ["--acp"]
+    },
+    "uvx": {
+      "package": "package-name",
+      "args": ["serve"]
     }
-  ]
+  }
 }
 ```
 
@@ -88,9 +95,9 @@ For binary distribution, use these platform identifiers:
 - `windows-aarch64` - Windows ARM64
 - `windows-x86_64` - Windows x86_64
 
-## Adding an Agent
+## Adding an Agent or Extension
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for instructions on submitting a new agent.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for instructions.
 
 ## License
 
