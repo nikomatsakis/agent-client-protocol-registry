@@ -11,12 +11,22 @@ from pathlib import Path
 
 try:
     import jsonschema
+
     HAS_JSONSCHEMA = True
 except ImportError:
     HAS_JSONSCHEMA = False
 
 REGISTRY_VERSION = "1.0.0"
-SKIP_DIRS = {".claude", ".git", ".github", ".idea", "__pycache__", "dist", "_not_yet_unsupported", ".sandbox"}
+SKIP_DIRS = {
+    ".claude",
+    ".git",
+    ".github",
+    ".idea",
+    "__pycache__",
+    "dist",
+    "_not_yet_unsupported",
+    ".sandbox",
+}
 REQUIRED_FIELDS = {"id", "name", "version", "description", "distribution"}
 VALID_DISTRIBUTION_TYPES = {"binary", "npx", "uvx"}
 VALID_PLATFORMS = {
@@ -29,14 +39,20 @@ VALID_PLATFORMS = {
 }
 
 # Can be overridden via environment variable
-DEFAULT_BASE_URL = "https://github.com/agentclientprotocol/registry/releases/latest/download"
+DEFAULT_BASE_URL = (
+    "https://github.com/agentclientprotocol/registry/releases/latest/download"
+)
 
 # Icon requirements
 PREFERRED_ICON_SIZE = 16
 ALLOWED_FILL_STROKE_VALUES = {"currentcolor", "none", "inherit"}
 
 # URL validation
-SKIP_URL_VALIDATION = os.environ.get("SKIP_URL_VALIDATION", "").lower() in ("1", "true", "yes")
+SKIP_URL_VALIDATION = os.environ.get("SKIP_URL_VALIDATION", "").lower() in (
+    "1",
+    "true",
+    "yes",
+)
 
 
 def url_exists(url: str, method: str = "HEAD") -> bool:
@@ -62,7 +78,7 @@ def extract_npm_package_name(package_spec: str) -> str:
         # Find the second @ (version separator) if it exists
         at_positions = [i for i, c in enumerate(package_spec) if c == "@"]
         if len(at_positions) > 1:
-            return package_spec[:at_positions[1]]
+            return package_spec[: at_positions[1]]
         return package_spec
     else:
         # Unscoped: name@version -> name
@@ -75,7 +91,7 @@ def extract_npm_package_version(package_spec: str) -> str | None:
     if package_spec.startswith("@"):
         at_positions = [i for i, c in enumerate(package_spec) if c == "@"]
         if len(at_positions) > 1:
-            return package_spec[at_positions[1] + 1:]
+            return package_spec[at_positions[1] + 1 :]
         return None
     else:
         # Unscoped: name@version -> version
@@ -94,11 +110,11 @@ def normalize_version(version: str) -> str:
 def extract_version_from_url(url: str) -> str | None:
     """Extract version from binary archive URL."""
     # GitHub releases: /download/v1.0.0/ or /releases/v1.0.0/
-    github_match = re.search(r'/(?:download|releases)/v?([\d.]+)/', url)
+    github_match = re.search(r"/(?:download|releases)/v?([\d.]+)/", url)
     if github_match:
         return normalize_version(github_match.group(1))
     # npm tarballs: /-/package-1.0.0.tgz
-    npm_match = re.search(r'/-/[^/]+-(\d+\.\d+\.\d+)\.tgz', url)
+    npm_match = re.search(r"/-/[^/]+-(\d+\.\d+\.\d+)\.tgz", url)
     if npm_match:
         return npm_match.group(1)
     return None
@@ -113,33 +129,45 @@ def validate_distribution_versions(agent_version: str, distribution: dict) -> li
         for platform, target in distribution["binary"].items():
             url = target.get("archive", "")
             if "/latest/" in url:
-                errors.append(f"Binary URL for {platform} uses '/latest/' - use explicit version instead")
+                errors.append(
+                    f"Binary URL for {platform} uses '/latest/' - use explicit version instead"
+                )
             else:
                 url_version = extract_version_from_url(url)
                 if url_version and url_version != agent_version:
-                    errors.append(f"Binary URL for {platform} has version {url_version}, expected {agent_version}")
+                    errors.append(
+                        f"Binary URL for {platform} has version {url_version}, expected {agent_version}"
+                    )
 
     # Check npm packages
     if "npx" in distribution:
         package = distribution["npx"].get("package", "")
         if "@latest" in package.lower():
-            errors.append(f"npx package uses '@latest' - use explicit version instead: {package}")
+            errors.append(
+                f"npx package uses '@latest' - use explicit version instead: {package}"
+            )
         else:
             pkg_version = extract_npm_package_version(package)
             if pkg_version and pkg_version != agent_version:
-                errors.append(f"npx package version ({pkg_version}) doesn't match agent version ({agent_version})")
+                errors.append(
+                    f"npx package version ({pkg_version}) doesn't match agent version ({agent_version})"
+                )
 
     # Check PyPI packages
     if "uvx" in distribution:
         package = distribution["uvx"].get("package", "")
         if "@latest" in package.lower():
-            errors.append(f"uvx package uses '@latest' - use explicit version instead: {package}")
+            errors.append(
+                f"uvx package uses '@latest' - use explicit version instead: {package}"
+            )
         # Extract version from uvx package (formats: package==version, package>=version, package@version)
-        version_match = re.search(r'[=@]+([\d.]+)', package)
+        version_match = re.search(r"[=@]+([\d.]+)", package)
         if version_match:
             pkg_version = version_match.group(1)
             if pkg_version != agent_version:
-                errors.append(f"uvx package version ({pkg_version}) doesn't match agent version ({agent_version})")
+                errors.append(
+                    f"uvx package version ({pkg_version}) doesn't match agent version ({agent_version})"
+                )
 
     return errors
 
@@ -157,7 +185,9 @@ def validate_distribution_urls(distribution: dict) -> list[str]:
             if "archive" in target:
                 url = target["archive"]
                 if not url_exists(url):
-                    errors.append(f"Binary archive URL not accessible for {platform}: {url}")
+                    errors.append(
+                        f"Binary archive URL not accessible for {platform}: {url}"
+                    )
 
     # Check npm package URLs (registry.npmjs.org)
     seen_npm = set()
@@ -175,7 +205,7 @@ def validate_distribution_urls(distribution: dict) -> list[str]:
     if "uvx" in distribution:
         package = distribution["uvx"].get("package", "")
         # Extract package name without version specifier
-        pkg_name = re.split(r'[<>=!@]', package)[0]
+        pkg_name = re.split(r"[<>=!@]", package)[0]
         pypi_url = f"https://pypi.org/pypi/{pkg_name}/json"
         if not url_exists(pypi_url):
             errors.append(f"PyPI package not found: {pkg_name}")
@@ -189,36 +219,50 @@ def validate_icon_monochrome(content: str) -> list[str]:
     reported_colors = set()
 
     # Check fill attributes - must be currentColor or none
-    fill_matches = re.findall(r'\bfill\s*=\s*["\']([^"\']+)["\']', content, re.IGNORECASE)
+    fill_matches = re.findall(
+        r'\bfill\s*=\s*["\']([^"\']+)["\']', content, re.IGNORECASE
+    )
     for fill_value in fill_matches:
         normalized = fill_value.strip().lower()
         if normalized not in ALLOWED_FILL_STROKE_VALUES:
-            errors.append(f"Icon has hardcoded fill=\"{fill_value}\" (use currentColor or none)")
+            errors.append(
+                f'Icon has hardcoded fill="{fill_value}" (use currentColor or none)'
+            )
             reported_colors.add(fill_value.strip())
 
     # Check stroke attributes - must be currentColor or none
-    stroke_matches = re.findall(r'\bstroke\s*=\s*["\']([^"\']+)["\']', content, re.IGNORECASE)
+    stroke_matches = re.findall(
+        r'\bstroke\s*=\s*["\']([^"\']+)["\']', content, re.IGNORECASE
+    )
     for stroke_value in stroke_matches:
         normalized = stroke_value.strip().lower()
         if normalized not in ALLOWED_FILL_STROKE_VALUES:
-            errors.append(f"Icon has hardcoded stroke=\"{stroke_value}\" (use currentColor or none)")
+            errors.append(
+                f'Icon has hardcoded stroke="{stroke_value}" (use currentColor or none)'
+            )
             reported_colors.add(stroke_value.strip())
 
     # Check for hardcoded colors in style attributes
-    style_matches = re.findall(r'\bstyle\s*=\s*["\']([^"\']+)["\']', content, re.IGNORECASE)
+    style_matches = re.findall(
+        r'\bstyle\s*=\s*["\']([^"\']+)["\']', content, re.IGNORECASE
+    )
     for style_value in style_matches:
         # Check for fill/stroke with hardcoded colors in style
-        style_fill = re.search(r'\bfill\s*:\s*([^;]+)', style_value, re.IGNORECASE)
+        style_fill = re.search(r"\bfill\s*:\s*([^;]+)", style_value, re.IGNORECASE)
         if style_fill:
             fill_val = style_fill.group(1).strip().lower()
             if fill_val not in ALLOWED_FILL_STROKE_VALUES:
-                errors.append(f"Icon has hardcoded style fill: {style_fill.group(1).strip()}")
+                errors.append(
+                    f"Icon has hardcoded style fill: {style_fill.group(1).strip()}"
+                )
                 reported_colors.add(style_fill.group(1).strip())
-        style_stroke = re.search(r'\bstroke\s*:\s*([^;]+)', style_value, re.IGNORECASE)
+        style_stroke = re.search(r"\bstroke\s*:\s*([^;]+)", style_value, re.IGNORECASE)
         if style_stroke:
             stroke_val = style_stroke.group(1).strip().lower()
             if stroke_val not in ALLOWED_FILL_STROKE_VALUES:
-                errors.append(f"Icon has hardcoded style stroke: {style_stroke.group(1).strip()}")
+                errors.append(
+                    f"Icon has hardcoded style stroke: {style_stroke.group(1).strip()}"
+                )
                 reported_colors.add(style_stroke.group(1).strip())
 
     # Deduplicate errors
@@ -241,7 +285,9 @@ def validate_icon(icon_path: Path) -> list[str]:
 
     # Try viewBox if width/height not found
     if not width_match or not height_match:
-        viewbox_match = re.search(r'viewBox=["\'][\d.]+\s+[\d.]+\s+([\d.]+)\s+([\d.]+)', content)
+        viewbox_match = re.search(
+            r'viewBox=["\'][\d.]+\s+[\d.]+\s+([\d.]+)\s+([\d.]+)', content
+        )
         if viewbox_match:
             vb_width = float(viewbox_match.group(1))
             vb_height = float(viewbox_match.group(2))
@@ -257,7 +303,9 @@ def validate_icon(icon_path: Path) -> list[str]:
         errors.append(f"Icon must be square (got {vb_width}x{vb_height})")
 
     if vb_width != PREFERRED_ICON_SIZE or vb_height != PREFERRED_ICON_SIZE:
-        errors.append(f"Icon should be {PREFERRED_ICON_SIZE}x{PREFERRED_ICON_SIZE} (got {int(vb_width)}x{int(vb_height)})")
+        errors.append(
+            f"Icon should be {PREFERRED_ICON_SIZE}x{PREFERRED_ICON_SIZE} (got {int(vb_width)}x{int(vb_height)})"
+        )
 
     # Validate monochrome (currentColor) usage
     monochrome_errors = validate_icon_monochrome(content)
@@ -302,7 +350,9 @@ def validate_against_schema(agent: dict, schema: dict) -> list[str]:
     return errors
 
 
-def validate_agent(agent: dict, agent_dir: str, schema: dict | None = None) -> list[str]:
+def validate_agent(
+    agent: dict, agent_dir: str, schema: dict | None = None
+) -> list[str]:
     """Validate agent.json and return list of errors."""
     errors = []
 
@@ -328,14 +378,18 @@ def validate_agent(agent: dict, agent_dir: str, schema: dict | None = None) -> l
         elif not all(c.islower() or c.isdigit() or c == "-" for c in agent_id):
             errors.append("Field 'id' must be lowercase with hyphens only")
         elif agent_id != agent_dir:
-            errors.append(f"Field 'id' ({agent_id}) must match directory name ({agent_dir})")
+            errors.append(
+                f"Field 'id' ({agent_id}) must match directory name ({agent_dir})"
+            )
 
     # Validate version format
     if "version" in agent:
         version = agent["version"]
         parts = version.split(".")
         if len(parts) < 3 or not all(p.isdigit() for p in parts[:3]):
-            errors.append(f"Field 'version' ({version}) must be semantic version (e.g., 1.0.0)")
+            errors.append(
+                f"Field 'version' ({version}) must be semantic version (e.g., 1.0.0)"
+            )
 
     # Validate distribution
     if "distribution" in agent:
@@ -345,31 +399,43 @@ def validate_agent(agent: dict, agent_dir: str, schema: dict | None = None) -> l
         else:
             unknown_types = set(dist.keys()) - VALID_DISTRIBUTION_TYPES
             if unknown_types:
-                errors.append(f"Unknown distribution types: {', '.join(sorted(unknown_types))}")
+                errors.append(
+                    f"Unknown distribution types: {', '.join(sorted(unknown_types))}"
+                )
 
             # Validate binary platforms
             if "binary" in dist:
                 binary = dist["binary"]
                 if not isinstance(binary, dict) or not binary:
-                    errors.append("Field 'distribution.binary' must be a non-empty object")
+                    errors.append(
+                        "Field 'distribution.binary' must be a non-empty object"
+                    )
                 else:
                     unknown_platforms = set(binary.keys()) - VALID_PLATFORMS
                     if unknown_platforms:
-                        errors.append(f"Unknown platforms: {', '.join(sorted(unknown_platforms))}")
+                        errors.append(
+                            f"Unknown platforms: {', '.join(sorted(unknown_platforms))}"
+                        )
 
                     for platform, target in binary.items():
                         if platform in VALID_PLATFORMS:
                             if "archive" not in target:
-                                errors.append(f"Platform {platform} missing 'archive' field")
+                                errors.append(
+                                    f"Platform {platform} missing 'archive' field"
+                                )
                             if "cmd" not in target:
-                                errors.append(f"Platform {platform} missing 'cmd' field")
+                                errors.append(
+                                    f"Platform {platform} missing 'cmd' field"
+                                )
 
             # Validate package distributions
             for dist_type in ("npx", "uvx"):
                 if dist_type in dist:
                     pkg_dist = dist[dist_type]
                     if "package" not in pkg_dist:
-                        errors.append(f"Distribution '{dist_type}' missing 'package' field")
+                        errors.append(
+                            f"Distribution '{dist_type}' missing 'package' field"
+                        )
 
     return errors
 
@@ -417,7 +483,9 @@ def build_registry():
 
         # Validate distribution versions match agent version
         if "distribution" in agent:
-            version_errors = validate_distribution_versions(agent["version"], agent["distribution"])
+            version_errors = validate_distribution_versions(
+                agent["version"], agent["distribution"]
+            )
             if version_errors:
                 print(f"Error: {agent_dir.name} version validation failed:")
                 for error in version_errors:
@@ -428,7 +496,9 @@ def build_registry():
         # Check for duplicate IDs
         agent_id = agent["id"]
         if agent_id in seen_ids:
-            print(f"Error: Duplicate agent ID '{agent_id}' in {agent_dir.name}/ (already in {seen_ids[agent_id]}/)")
+            print(
+                f"Error: Duplicate agent ID '{agent_id}' in {agent_dir.name}/ (already in {seen_ids[agent_id]}/)"
+            )
             has_errors = True
             continue
         seen_ids[agent_id] = agent_dir.name
